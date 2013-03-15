@@ -1,5 +1,5 @@
 PROGS = guppi_combine
-PREFIX = /usr/local
+PREFIX ?= /usr/local
 BINDIR = $(PREFIX)/bin
 all: $(PROGS)
 install: $(PROGS)
