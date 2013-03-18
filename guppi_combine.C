@@ -202,7 +202,7 @@ void guppi_combine::do_transfer()
         string rfile = cluster_nodes[inode] + "-10::data/gpu/partial/" + 
             cluster_nodes[inode] + "/" + script;
         string dest = base_dir + "/" + cluster_nodes[inode] + "/";
-        string cmd = "rsync -avP " + rfile + " " + dest;
+        string cmd = "rsync -a " + rfile + " " + dest;
         if (verbose)
             cerr << name << ": execing '" << cmd << "'" << endl;
         system(cmd.c_str()); // check return?
