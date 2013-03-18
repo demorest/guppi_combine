@@ -315,7 +315,7 @@ void guppi_combine::run ()
     if (transfer)
     {
         if (verbose)
-            cerr << name << ":  removing '" << orig_fname << "'" << endl;
+            cerr << name << ": removing '" << orig_fname << "'" << endl;
         unlink(orig_fname.c_str());
     }
         
