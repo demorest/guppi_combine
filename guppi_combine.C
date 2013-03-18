@@ -54,8 +54,20 @@ class guppi_combine: public Pulsar::Application
         //! Name of output file
         string unload_name;
 
+        //! Name of output dir
+        string unload_dir;
+
         //! Data are in gpuN/ subdir structure under the given base
         string base_dir;
+
+        //! Download data from gpu cluster
+        bool transfer;
+
+        //! List of nodes
+        vector<string> cluster_nodes;
+
+        //! Do the file transfer
+        void do_transfer();
 };
 
 int main (int argc, char** argv)
@@ -75,6 +87,17 @@ guppi_combine::guppi_combine() : Pulsar::Application("guppi_combine",
 
     stow_script = false;
 
+    cluster_nodes.clear();
+    cluster_nodes.push_back("gpu1");
+    cluster_nodes.push_back("gpu2");
+    cluster_nodes.push_back("gpu3");
+    cluster_nodes.push_back("gpu4");
+    cluster_nodes.push_back("gpu5");
+    cluster_nodes.push_back("gpu6");
+    cluster_nodes.push_back("gpu7");
+    cluster_nodes.push_back("gpu8");
+    cluster_nodes.push_back("gpu9");
+
     add( new Pulsar::StandardOptions );
 }
 
@@ -86,6 +109,9 @@ void guppi_combine::add_options (CommandLine::Menu& menu)
 
     arg = menu.add (unload_name, 'o', "fname");
     arg->set_help ("output results to 'fname'");
+
+    arg = menu.add (unload_dir, 'O', "dir");
+    arg->set_help ("output results to 'dir'");
 
     arg = menu.add (base_dir, 'D', "dir");
     arg->set_help ("use gpuN/ subdir structure under given base dir");
@@ -104,10 +130,29 @@ void guppi_combine::add_options (CommandLine::Menu& menu)
             "argument to the program when this option is in use."
             );
 
+    arg = menu.add (transfer, 'T');
+    arg->set_help("transfer data directly from gpu cluster nodes");
+    // Same hack with 'script' variable happens in this case
+    arg->set_notification(stow_script);
+    arg->set_long_help(
+            "With this option, the data will be temporarily stored under\n"
+            "the directory name specified by -D, defaulting to /dev/shm.\n"
+            "Files are deleted after they are combined.  For now, node\n"
+            "names are hardcoded in this program."
+            );
+
 }
 
 void guppi_combine::setup ()
 {
+
+    // Do file transfer as necessary
+    if (transfer)
+    {
+        if (base_dir.empty())
+            base_dir = "/dev/shm";
+        do_transfer();
+    }
 
     // If using dir structure, get list of files
     if (!base_dir.empty())
@@ -118,8 +163,10 @@ void guppi_combine::setup ()
         if (filenames.size())
             throw Error (InvalidState, "guppi_combine::setup",
                     "When using -D option, only one input filename is allowed");
+        if (unload_dir.empty())
+            unload_dir = base_dir;
         if (unload_name.empty()) 
-            unload_name = base_dir + "/" + script;
+            unload_name = script;
         string filepattern;
         filepattern = base_dir + "/gpu*/" + script;
         filenames.clear();
@@ -140,6 +187,26 @@ void guppi_combine::setup ()
     if (unload_name.empty())
         throw Error (InvalidState, "guppi_combine::setup", 
                 "specify output filename using -o");
+
+    // Make full output name
+    if (!unload_dir.empty())
+        unload_name = unload_dir + "/" + unload_name;
+}
+
+void guppi_combine::do_transfer()
+{
+    // TODO: look into making this loop parallel to speed up transfer
+    // of large files.
+    for (unsigned inode=0; inode<cluster_nodes.size(); inode++)
+    {
+        string rfile = cluster_nodes[inode] + "-10::data/gpu/partial/" + 
+            cluster_nodes[inode] + "/" + script;
+        string dest = base_dir + "/" + cluster_nodes[inode] + "/";
+        string cmd = "rsync -avP " + rfile + " " + dest;
+        if (verbose)
+            cerr << name << ": execing '" << cmd << "'" << endl;
+        system(cmd.c_str()); // check return?
+    }
 }
 
 bool freq_compare(const Reference::To<Archive>& a1, 
@@ -201,7 +268,8 @@ void guppi_combine::run ()
             cerr << name << ": processing '" << arch->get_filename() 
                 << "'" << endl;
 
-        // TODO how much checking should we do ...
+        // How picky should we be about the input files matching up?
+        // psrchive routines usually catch this kind of stuff..
 
         // Apply the ref profile polycos to the input files
         arch->set_model( out_arch->get_model() );
@@ -216,17 +284,39 @@ void guppi_combine::run ()
         hdr = arch->get<FITSHdrExtension>();
         freq_sum += hdr->obsfreq + hdr->obsbw/(double)hdr->obsnchan/2.0;
 
-        // Should cause it to be deallocated when done (saving some memory)
+        // Delete the temp file if we are running in transfer mode
+        if (transfer)
+        {
+            if (verbose)
+                cerr << name << ": removing '" << arch->get_filename()
+                    << "'" << endl;
+            unlink(arch->get_filename().c_str()); // Check return
+        }
+
+        // deallocate when done (saving some memory)
         arch = NULL;
         archives[iarch] = NULL;
+
     }
 
     // Fix the center freq
     hdr = out_arch->get<FITSHdrExtension>();
     hdr->obsfreq = freq_sum / (double)archives.size();
 
+    // Store original out_arch files
+    string orig_fname = out_arch->get_filename();
+
     // All done, unload the thing
     if (verbose)
         cerr << name << ": unloading '" << unload_name << "'" << endl;
     out_arch->unload(unload_name);
+
+    // Remove the last file if necessary
+    if (transfer)
+    {
+        if (verbose)
+            cerr << name << ":  removing '" << orig_fname << "'" << endl;
+        unlink(orig_fname.c_str());
+    }
+        
 }
