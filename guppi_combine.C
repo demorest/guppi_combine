@@ -68,6 +68,9 @@ class guppi_combine: public Pulsar::Application
 
         //! Do the file transfer
         void do_transfer();
+
+        //! Delete a file
+        void remove_file(string fname);
 };
 
 int main (int argc, char** argv)
@@ -215,6 +218,13 @@ bool freq_compare(const Reference::To<Archive>& a1,
     return a1->get_centre_frequency() < a2->get_centre_frequency();
 }
 
+void guppi_combine::remove_file(string fname)
+{
+    if (verbose)
+        cerr << name << ": removing '" << fname << "'" << endl;
+    unlink(fname.c_str()); // Check return
+}
+
 void guppi_combine::run ()
 {
 
@@ -246,6 +256,8 @@ void guppi_combine::run ()
     if (verbose)
         cerr << name << ": using '" << out_arch->get_filename()
             << "' as reference" << endl;
+    // TODO make sure we can load this file completely
+
     FrequencyAppend freqappend;
     freqappend.init(out_arch);
     freqappend.ignore_phase = true; // we do our own rephasing 
@@ -270,6 +282,29 @@ void guppi_combine::run ()
 
         // How picky should we be about the input files matching up?
         // psrchive routines usually catch this kind of stuff..
+        // At least try loading all the Integrations to catch bad files
+        try 
+        {
+            for (unsigned isub=0; isub<arch->get_nsubint(); isub++)
+                arch->get_Integration(isub);
+        }
+        catch (Error& error)
+        {
+            if (verbose)
+                cerr << name << ": error processing '" << arch->get_filename()
+                    << "', skipping." << endl;
+
+            if (very_verbose)
+                cerr << "  " << error.get_message() << endl;
+
+            if (transfer)
+                remove_file(arch->get_filename());
+
+            arch = NULL;
+            archives[iarch] = NULL;
+
+            continue;
+        }
 
         // Apply the ref profile polycos to the input files
         arch->set_model( out_arch->get_model() );
@@ -286,12 +321,7 @@ void guppi_combine::run ()
 
         // Delete the temp file if we are running in transfer mode
         if (transfer)
-        {
-            if (verbose)
-                cerr << name << ": removing '" << arch->get_filename()
-                    << "'" << endl;
-            unlink(arch->get_filename().c_str()); // Check return
-        }
+            remove_file(arch->get_filename());
 
         // deallocate when done (saving some memory)
         arch = NULL;
