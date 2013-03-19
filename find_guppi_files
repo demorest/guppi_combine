@@ -1,0 +1,45 @@
+#! /usr/bin/env python
+
+# Explores the data dirs on beef for fold or cal mode incoherent
+# GUPPI files.  Prints a list of filename (with full path) and
+# project ID from the header for any matching files.
+
+import os, glob, re, string
+import fitsio
+
+# Files will exist under a path like:
+#  /data1/pdemores/AGBT09B_041/20100421/guppi_55307_J2013-06_0002_0001.fits
+
+disks = ["/data1", "/data2"]
+
+for disk in disks:
+    for user in os.listdir(disk):
+        userdir = disk + "/" + user
+        if not os.path.isdir(userdir): continue
+        # GBT proj IDs usually start with A or T...
+        for proj_dir in glob.iglob(userdir+"/[AT]*/*"):
+            if re.match('\d{8}',string.split(proj_dir,'/')[-1]):
+                # Could make a more restrictive file name match here
+                # but it's probably not necessary
+                for file in glob.iglob(proj_dir+"/guppi_*.fits"):
+                    # Skip symlinks
+                    if os.path.islink(file): continue
+                    # We need to get the obs mode and proj id from header
+                    # try/except to skip any broken files
+                    try:
+                        ffile = fitsio.FITS(file)
+                        hdr = ffile[0].read_header()
+                        ffile.close()
+                        mode = hdr['OBS_MODE'].strip()
+                        projid = hdr['PROJID'].strip()
+                        fitsver = hdr['HDRVER'].strip()
+                        # Decide whether or not this file should be archived
+                        # Notes, if fitsver!=3.4 then this is likely not
+                        # a raw guppi file, but has had some psrchive-based
+                        # processing done to it.  Could relax this 
+                        # restriction as necessary.
+                        if (mode=='PSR' or mode=='CAL') and fitsver=='3.4':
+                            print file, projid
+                    except:
+                        pass
+
