@@ -1,0 +1,111 @@
+#! /usr/bin/env python
+
+import os, sys, string
+gpu = os.uname()[1]
+
+from optparse import OptionParser
+parser = OptionParser()
+parser.add_option("-Q", "--query",
+        action="store_true", dest="print_query",
+        default=False,
+        help="Just print the generated query and exit")
+parser.add_option("-f", "--dbfile",
+        action="store", dest="dbfile",
+        default="/data/gpu/partial/%s.idx" % gpu,
+        help="Database file name")
+parser.add_option("-s", "--strip",
+        action="store_true", dest="strip",
+        default=False, 
+        help="Strip leading dirs from results")
+parser.add_option("-S", "--size",
+        action="store_true", dest="size",
+        default=False,
+        help="Return total size of files matching query")
+parser.add_option("-O", "--output",
+        action="store", dest="output", type="string",
+        default="name",
+        help="List of fields to output")
+parser.add_option("-m", "--mjd",
+        action="store", dest="mjd_min",
+        default=0,
+        help="Starting MJD")
+parser.add_option("-p", "--projid",
+        action="store", dest="projid", type="string",
+        default=None,
+        help="Project ID")
+parser.add_option("-M", "--unmerged",
+        action="store_false", dest="merged",
+        default=None,
+        help="Merged flag is false")
+parser.add_option("-t", "--type",
+        action="append", dest="types",
+        default=None, type="string",
+        help="Scan type (PSR, CAL, SEARCH)")
+(opt,args) = parser.parse_args()
+
+# Build up query
+vals = ()
+if opt.size:
+    qry = "select total(size) from files"
+else:
+    qry = "select %s from files" % (opt.output)
+first = True
+
+if opt.mjd_min:
+    if first: qry += " where"
+    else: qry += " and"
+    qry += " mjd>?"
+    vals += (opt.mjd_min,)
+    first = False
+
+if opt.projid:
+    if first: qry += " where"
+    else: qry += " and"
+    qry += " projid like ?"
+    vals += ("%%%s%%" % opt.projid,)
+    first = False
+
+if opt.merged!=None:
+    if first: qry += " where"
+    else: qry += " and"
+    if not opt.merged: qry += " not"
+    qry += " merged"
+    first = False
+
+if opt.types:
+    if first: qry += " where"
+    else: qry += " and"
+    qry += " (type=?"
+    vals += (opt.types[0],)
+    if len(opt.types)>1:
+        for t in opt.types[1:]:
+            qry += " or type=?"
+            vals += (t,)
+    qry += ")"
+    first = False
+
+if opt.print_query:
+    print qry
+    print vals
+    sys.exit()
+
+import sqlite3
+conn = sqlite3.connect(opt.dbfile)
+c = conn.cursor()
+c.execute(qry, vals)
+for r in c.fetchall():
+    if opt.size:
+        size = r[0]
+        if (size > 1e9):
+            print "%.1f GB" % (size/1.0e9)
+        else:
+            print "%.1f MB" % (size/1.0e6)
+    else:
+        out = ""
+        for fname in r:
+            #fname = r[0]
+            if (opt.strip):
+                fname = fname.split('/')[-1]
+            out += fname + " "
+        print out
+
