@@ -1,0 +1,36 @@
+#! /usr/bin/env python
+
+import os, sys, subprocess
+
+nodes = ["gpu1-10", "gpu2-10", "gpu3-10", "gpu4-10", "gpu5-10", "gpu6-10",
+        "gpu7-10", "gpu8-10", "gpu9-10"]
+
+# Update the file list from each node
+files = []
+for node in nodes:
+    listf = subprocess.Popen(["ssh",node,"select_files -s -M -O name,projid -p 12B_320 -t PSR -t CAL"], stdout=subprocess.PIPE)
+    for line in listf.stdout.readlines():
+        files += [line.rstrip()]
+
+# Get the unique list
+files = list(set(files))
+
+# Call combine on each
+basedir = "/lustre/pulsar/scratch/GUPPI2"
+for f in files:
+    (fname,proj) = f.split()
+    outdir = basedir + "/" + proj
+    print outdir
+    sys.stdout.flush()
+    try:
+        os.makedirs(outdir)
+    except:
+        # This is to catch the 'directory already exists' error.
+        # Should make it more selective.
+        pass
+    cmd = ["guppi_combine","-v","-T","-O",outdir,fname]
+    print cmd
+    sys.stdout.flush()
+    subprocess.call(cmd)
+    # Make sure stuff does not accumulate in /dev/shm...
+    os.system("rm /dev/shm/gpu?/guppi*.fits")
