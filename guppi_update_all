@@ -29,7 +29,7 @@ for f in files:
         print fname + " exists, skipping."
         continue
     # Grab file from beef
-    cmd = ["rsync", "-avP", "beef::"+fname_full.lstrip('/'), outdir+"/"]
+    cmd = ["rsync", "-av", "--progress", "beef-10::"+fname_full.lstrip('/'), outdir+"/"]
     print cmd
     sys.stdout.flush()
     subprocess.call(cmd)
