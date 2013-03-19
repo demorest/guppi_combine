@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-import os, sys, subprocess
+import os, sys, shutil, subprocess
 
 nodes = ["gpu1-10", "gpu2-10", "gpu3-10", "gpu4-10", "gpu5-10", "gpu6-10",
         "gpu7-10", "gpu8-10", "gpu9-10"]
@@ -28,9 +28,18 @@ for f in files:
         # This is to catch the 'directory already exists' error.
         # Should make it more selective.
         pass
-    cmd = ["guppi_combine","-v","-T","-O",outdir,fname]
+    if os.path.exists(outdir + "/" + fname):
+        print fname + " exists, skipping."
+        continue
+    # Output file to /dev/shm then move it to avoid 
+    # cfitsio and psrchive buffering/write patterns
+    # going really slow on lustre..
+    cmd = ["guppi_combine","-v","-T","-O","/dev/shm",fname]
     print cmd
     sys.stdout.flush()
     subprocess.call(cmd)
-    # Make sure stuff does not accumulate in /dev/shm...
+    print "guppi2_update_all: moving '" + fname + "' to '" + outdir + "'"
+    sys.stdout.flush()
+    shutil.move("/dev/shm/" + fname, outdir + "/" + fname)
+    # Make sure stuff does not accumulate in /dev/shm
     os.system("rm /dev/shm/gpu?/guppi*.fits")
