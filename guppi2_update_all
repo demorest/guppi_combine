@@ -40,6 +40,9 @@ for f in files:
     subprocess.call(cmd)
     print "guppi2_update_all: moving '" + fname + "' to '" + outdir + "'"
     sys.stdout.flush()
-    shutil.move("/dev/shm/" + fname, outdir + "/" + fname)
+    try:
+        shutil.move("/dev/shm/" + fname, outdir + "/" + fname)
+    except:
+        print "guppi2_update_all: error processing '" + fname + "'"
     # Make sure stuff does not accumulate in /dev/shm
     os.system("rm /dev/shm/gpu?/guppi*.fits")
