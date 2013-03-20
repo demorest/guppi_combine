@@ -20,6 +20,10 @@
 
 #include <iostream>
 
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 using namespace std;
 using namespace Pulsar;
 
@@ -63,6 +67,9 @@ class guppi_combine: public Pulsar::Application
         //! Download data from gpu cluster
         bool transfer;
 
+        //! Do transfers in parallel
+        bool parallel_transfers;
+
         //! List of nodes
         vector<string> cluster_nodes;
 
@@ -89,6 +96,9 @@ guppi_combine::guppi_combine() : Pulsar::Application("guppi_combine",
     sort_filenames = false;
 
     stow_script = false;
+
+    transfer = false;
+    parallel_transfers = true;
 
     cluster_nodes.clear();
     cluster_nodes.push_back("gpu1");
@@ -198,17 +208,50 @@ void guppi_combine::setup ()
 
 void guppi_combine::do_transfer()
 {
-    // TODO: look into making this loop parallel to speed up transfer
-    // of large files.
-    for (unsigned inode=0; inode<cluster_nodes.size(); inode++)
+    if (parallel_transfers)
     {
-        string rfile = cluster_nodes[inode] + "-10::data/gpu/partial/" + 
-            cluster_nodes[inode] + "/" + script;
-        string dest = base_dir + "/" + cluster_nodes[inode] + "/";
-        string cmd = "rsync -a " + rfile + " " + dest;
-        if (verbose)
-            cerr << name << ": execing '" << cmd << "'" << endl;
-        system(cmd.c_str()); // check return?
+        vector <pid_t> pids;
+        for (unsigned inode=0; inode<cluster_nodes.size(); inode++)
+        {
+            pid_t pid = fork();
+            if (pid==0)
+            {
+                // Child process, do transfer
+                string rfile = cluster_nodes[inode] + "-10::data/gpu/partial/" 
+                    + cluster_nodes[inode] + "/" + script;
+                string dest = base_dir + "/" + cluster_nodes[inode] + "/";
+                if (verbose)
+                    cerr << name << " " << inode << ": execing rsync "
+                        << rfile << " " << dest << endl;
+                execlp("rsync","-a",rfile.c_str(),dest.c_str(),NULL);
+            }
+            else if (pid==-1)
+                throw Error (FailedSys, "guppi_combine::do_transfer",
+                        "fork() failed");
+            else
+                pids.push_back(pid);
+        }
+
+        // Main process, wait for children
+        if (pids.size())
+        {
+            for (unsigned ipid=0; ipid<pids.size(); ipid++) 
+                waitpid(pids[ipid],NULL,0);
+        }
+
+    }
+    else
+    {
+        for (unsigned inode=0; inode<cluster_nodes.size(); inode++)
+        {
+            string rfile = cluster_nodes[inode] + "-10::data/gpu/partial/" + 
+                cluster_nodes[inode] + "/" + script;
+            string dest = base_dir + "/" + cluster_nodes[inode] + "/";
+            string cmd = "rsync -a " + rfile + " " + dest;
+            if (verbose)
+                cerr << name << ": execing '" << cmd << "'" << endl;
+            system(cmd.c_str()); // check return?
+        }
     }
 }
 
