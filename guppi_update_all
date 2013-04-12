@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-import os, sys, shutil, subprocess
+import os, sys, shutil, subprocess, re
 
 nodes = ["beef"]
 
@@ -11,12 +11,30 @@ for node in nodes:
     for line in listf.stdout.readlines():
         files += [line.rstrip()]
 
+# Handle all the cases that seem to appear in /home/archive/science-data
+# Not sure what to do about test data
+def projid_to_dir(projid):
+    m = re.match(r"AGBT(\d{2}[ABC])",projid)
+    if m:
+        return "science-data/" + m.group(1)
+    if re.match(r"AGLST",projid):
+        return "science-data/Fermi"
+    if re.match(r"ACH",projid):
+        return "science-data/Chandra"
+    if re.match(r"AB",projid):
+        return "science-data/VLBA"
+    if re.match(r"AG",projid):
+        return "science-data/GlobalVLBI"
+    return "science-data/other"
+
 # Copy files from beef
 basedir = "/lustre/pulsar/scratch/GUPPI"
 for f in files:
     (fname_full,proj) = f.split()
+    # Skip test projects for now
+    if proj[0]=='T': continue
     fname = fname_full.split('/')[-1]
-    outdir = basedir + "/" + proj
+    outdir = basedir + "/" + projid_to_dir(proj) + "/" + proj + "/GUPPI"
     print outdir
     sys.stdout.flush()
     try:

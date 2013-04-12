@@ -15,11 +15,29 @@ for node in nodes:
 # Get the unique list
 files = list(set(files))
 
+# Handle all the cases that seem to appear in /home/archive/science-data
+# Not sure what to do about test data
+def projid_to_dir(projid):
+    m = re.match(r"AGBT(\d{2}[ABC])",projid)
+    if m:
+        return "science-data/" + m.group(1)
+    if re.match(r"AGLST",projid):
+        return "science-data/Fermi"
+    if re.match(r"ACH",projid):
+        return "science-data/Chandra"
+    if re.match(r"AB",projid):
+        return "science-data/VLBA"
+    if re.match(r"AG",projid):
+        return "science-data/GlobalVLBI"
+    return "science-data/other"
+
 # Call combine on each
 basedir = "/lustre/pulsar/scratch/GUPPI2"
 for f in files:
     (fname,proj) = f.split()
-    outdir = basedir + "/" + proj
+    # Skip test projects for now
+    if proj[0]=='T': continue
+    outdir = basedir + "/" + projid_to_dir(proj) + "/" + proj + "/GUPPI"
     print outdir
     sys.stdout.flush()
     try:
