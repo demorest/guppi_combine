@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-import os, sys, shutil, subprocess
+import os, sys, shutil, subprocess, re
 
 nodes = ["gpu1-10", "gpu2-10", "gpu3-10", "gpu4-10", "gpu5-10", "gpu6-10",
         "gpu7-10", "gpu8-10", "gpu9-10"]
@@ -8,7 +8,8 @@ nodes = ["gpu1-10", "gpu2-10", "gpu3-10", "gpu4-10", "gpu5-10", "gpu6-10",
 # Update the file list from each node
 files = []
 for node in nodes:
-    listf = subprocess.Popen(["ssh",node,"select_files -s -M -O name,projid -p 12B_320 -t PSR -t CAL"], stdout=subprocess.PIPE)
+    #listf = subprocess.Popen(["ssh",node,"select_files -s -M -O name,projid -p 12B_320 -t PSR -t CAL"], stdout=subprocess.PIPE)
+    listf = subprocess.Popen(["ssh",node,"select_files -s -M -O name,projid -t PSR -t CAL"], stdout=subprocess.PIPE)
     for line in listf.stdout.readlines():
         files += [line.rstrip()]
 
