@@ -32,6 +32,15 @@ def projid_to_dir(projid):
         return "science-data/GlobalVLBI"
     return "science-data/other"
 
+# Set up the environment for guppi_combine
+guppi_env = os.environ.copy()
+psr64  = "/home/pulsar64"
+guppi_env['PATH'] = psr64+'/bin' + ':' + guppi_env.get('PATH','')
+guppi_env['LD_LIBRARY_PATH'] = psr64+'/lib' + ':' + guppi_env.get('LD_LIBRARY_PATH','')
+guppi_env['TEMPO'] = psr64+'/tempo'
+
+verbose = False
+
 # Call combine on each
 basedir = "/lustre/pulsar/scratch/GUPPI2"
 for f in files:
@@ -39,8 +48,9 @@ for f in files:
     # Skip test projects for now
     if proj[0]=='T': continue
     outdir = basedir + "/" + projid_to_dir(proj) + "/" + proj + "/GUPPI"
-    print outdir
-    sys.stdout.flush()
+    if verbose:
+        print outdir
+        sys.stdout.flush()
     try:
         os.makedirs(outdir)
     except:
@@ -48,7 +58,8 @@ for f in files:
         # Should make it more selective.
         pass
     if os.path.exists(outdir + "/" + fname):
-        print fname + " exists, skipping."
+        if verbose: 
+            print fname + " exists, skipping."
         continue
     # Output file to /dev/shm then move it to avoid 
     # cfitsio and psrchive buffering/write patterns
@@ -56,12 +67,13 @@ for f in files:
     cmd = ["guppi_combine","-v","-T","-O","/dev/shm",fname]
     print cmd
     sys.stdout.flush()
-    subprocess.call(cmd)
+    subprocess.call(cmd,env=guppi_env)
     print "guppi2_update_all: moving '" + fname + "' to '" + outdir + "'"
     sys.stdout.flush()
     try:
         shutil.move("/dev/shm/" + fname, outdir + "/" + fname)
     except:
         print "guppi2_update_all: error processing '" + fname + "'"
+        os.system("rm /dev/shm/" + fname)
     # Make sure stuff does not accumulate in /dev/shm
     os.system("rm /dev/shm/gpu?/guppi*.fits")
