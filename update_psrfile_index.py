@@ -13,6 +13,10 @@ parser.add_option("-f", "--dbfile",
         action="store", dest="dbfile", 
         default="/data/gpu/partial/%s.idx" % gpu,
         help="Database file name")
+parser.add_option("-t", "--time",
+        action="store", dest="time", type="float",
+        default=300.0,
+        help="Ignore files newer than N seconds (default 300)")
 (opt, arg) = parser.parse_args()
 
 import sqlite3
@@ -34,6 +38,9 @@ import glob
 #import pyfits
 import fitsio
 for fname in glob.iglob(datadir + "/guppi*fits"):
+    # Check file mod time
+    if (time.time() - os.stat(fname).st_mtime) < opt.time:
+        continue
     try:
         c.execute("select * from files where name=?", (fname,))
         if c.fetchone() == None:
