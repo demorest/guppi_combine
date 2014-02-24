@@ -2,13 +2,30 @@
 
 import os, sys, shutil, subprocess, re
 
+# subprocss.check_output replacement
+try:
+    from subprocess import check_output
+except ImportError:
+    # from https://gist.github.com/edufelipe/1027906
+    def check_output(*popenargs, **kwargs):
+        process = subprocess.Popen(stdout=subprocess.PIPE, *popenargs, **kwargs)
+        output, unused_err = process.communicate()
+        retcode = process.poll()
+        if retcode:
+            cmd = kwargs.get("args")
+            if cmd is None:
+                cmd = popenargs[0]
+            error = subprocess.CalledProcessError(retcode, cmd)
+            error.output = output
+            raise error
+        return output
+
 nodes = ["gpu1-10", "gpu2-10", "gpu3-10", "gpu4-10", "gpu5-10", "gpu6-10",
         "gpu7-10", "gpu8-10", "gpu9-10"]
 
 # Update the file list from each node
 files = []
 for node in nodes:
-    #listf = subprocess.Popen(["ssh",node,"select_files -s -M -O name,projid -p 12B_320 -t PSR -t CAL"], stdout=subprocess.PIPE)
     listf = subprocess.Popen(["ssh",node,"select_files -s -M -O name,projid -t PSR -t CAL"], stdout=subprocess.PIPE)
     for line in listf.stdout.readlines():
         files += [line.rstrip()]
@@ -48,6 +65,12 @@ if not os.path.exists(basedir):
     sys.stdout.flush()
     sys.exit(0)
 
+# Stats
+nskipped = 0
+merged_files = []
+error_files = []
+error_logs = {}
+
 # Call combine on each
 for f in files:
     (fname,proj) = f.split()
@@ -64,22 +87,63 @@ for f in files:
         # Should make it more selective.
         pass
     if os.path.exists(outdir + "/" + fname):
+        nskipped += 1
         if verbose: 
             print fname + " exists, skipping."
         continue
     # Output file to /dev/shm then move it to avoid 
     # cfitsio and psrchive buffering/write patterns
     # going really slow on lustre..
-    cmd = ["guppi_combine","-v","-T","-O","/dev/shm",fname]
-    print cmd
-    sys.stdout.flush()
-    subprocess.call(cmd,env=guppi_env)
-    print "guppi2_update_all: moving '" + fname + "' to '" + outdir + "'"
-    sys.stdout.flush()
+    cmd = ["guppi_combine","-T","-O","/dev/shm",fname]
+    if verbose:
+        print cmd
+        sys.stdout.flush()
     try:
-        shutil.move("/dev/shm/" + fname, outdir + "/" + fname)
-    except:
-        print "guppi2_update_all: error processing '" + fname + "'"
-        os.system("rm /dev/shm/" + fname)
+
+        # Call program, capture output
+        combine_out = ""
+        try:
+            combine_out = check_output(cmd,env=guppi_env,
+                    stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError, e:
+            combine_out = e.output
+
+        if verbose:
+            print "guppi2_update_all: moving '" + fname + "' to '" \
+                    + outdir + "'"
+            sys.stdout.flush()
+        final_file = outdir + '/' + fname
+        shutil.move("/dev/shm/" + fname, final_file)
+        merged_files.append(final_file)
+
+    except Exception, e:
+        error_files.append(fname)
+        error_logs[fname] = cmd.__str__() + '\n'
+        error_logs[fname] += combine_out
+        error_logs[fname] += e.__str__()
+        if verbose:
+            print "guppi2_update_all: error processing '" + fname + "'"
+        os.system("rm -f /dev/shm/" + fname)
     # Make sure stuff does not accumulate in /dev/shm
-    os.system("rm /dev/shm/gpu?/guppi*.fits")
+    os.system("rm -f /dev/shm/gpu?/guppi*.fits")
+
+# Print summary report
+print "guppi2_update_all summary:"
+print "  Skipped %d existing files" % nskipped
+print "  Merged %d files successfully" % len(merged_files)
+print "  Errors merging %d files" % len(error_files)
+
+if len(merged_files) > 0:
+    print "\nMerged files:\n"
+    print "  Base output dir = '%s'\n" % basedir
+    for f in merged_files:
+        print '  ' + f.replace(basedir,'',1)
+
+if len(error_files) > 0:
+    print "\nError reports:"
+    for f in error_files:
+        print '\n' + '*'*61
+        print f + ' ' + ('*'*(60-len(f)))
+        print '*'*61
+        print error_logs[f]
+
