@@ -41,8 +41,14 @@ guppi_env['TEMPO'] = psr64+'/tempo'
 
 verbose = False
 
-# Call combine on each
+# Test that output base dir exists
 basedir = "/lustre/pulsar/scratch/GUPPI2"
+if not os.path.exists(basedir):
+    print "Output base directory '%s' does not exist, exiting." % basedir
+    sys.stdout.flush()
+    sys.exit(0)
+
+# Call combine on each
 for f in files:
     (fname,proj) = f.split()
     # Skip test projects for now
