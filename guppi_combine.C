@@ -223,7 +223,7 @@ void guppi_combine::do_transfer()
                 if (verbose)
                     cerr << name << " " << inode << ": execing rsync "
                         << rfile << " " << dest << endl;
-                execlp("rsync","-a",rfile.c_str(),dest.c_str(),NULL);
+                execlp("rsync","--bwlimit=50000","-a",rfile.c_str(),dest.c_str(),NULL);
             }
             else if (pid==-1)
                 throw Error (FailedSys, "guppi_combine::do_transfer",
