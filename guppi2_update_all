@@ -136,12 +136,12 @@ print "  Errors merging %d files" % len(error_files)
 if len(merged_files) > 0:
     print "\nMerged files:\n"
     print "  Base output dir = '%s'\n" % basedir
-    for f in merged_files:
+    for f in sorted(merged_files,reverse=True):
         print '  ' + f.replace(basedir,'',1)
 
 if len(error_files) > 0:
     print "\nError reports:"
-    for f in error_files:
+    for f in sorted(error_files,reverse=True):
         print '\n' + '*'*61
         print f + ' ' + ('*'*(60-len(f)))
         print '*'*61
