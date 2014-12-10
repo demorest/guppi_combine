@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 import os, sys, shutil, subprocess, re
+from optparse import OptionParser
 
 # subprocss.check_output replacement
 try:
@@ -20,13 +21,27 @@ except ImportError:
             raise error
         return output
 
+par = OptionParser(usage="usage: %prog [options]")
+par.add_option('-p', dest="projid", 
+        help="Only process the specified project ID code",
+        action="store", type="string", default=None)
+par.add_option('-D', dest="basedir",
+        help="Use the specified base directory",
+        action="store", type="string",
+        default=None)
+(opt,arg) = par.parse_args()
+
 nodes = ["gpu1-10", "gpu2-10", "gpu3-10", "gpu4-10", "gpu5-10", "gpu6-10",
         "gpu7-10", "gpu8-10", "gpu9-10"]
+
+proj_arg = ''
+if opt.projid is not None:
+    proj_arg = ' -p %s' % opt.projid
 
 # Update the file list from each node
 files = []
 for node in nodes:
-    listf = subprocess.Popen(["ssh",node,"select_files -s -M -O name,projid -t PSR -t CAL"], stdout=subprocess.PIPE)
+    listf = subprocess.Popen(["ssh",node,"select_files -s -M -O name,projid -t PSR -t CAL"+proj_arg], stdout=subprocess.PIPE)
     for line in listf.stdout.readlines():
         files += [line.rstrip()]
 
@@ -47,6 +62,8 @@ def projid_to_dir(projid):
         return "science-data/VLBA"
     if re.match(r"AG",projid):
         return "science-data/GlobalVLBI"
+    if re.match(r"T",projid):
+        return "test-data"
     return "science-data/other"
 
 # Set up the environment for guppi_combine
@@ -60,6 +77,8 @@ verbose = False
 
 # Test that output base dir exists
 basedir = "/lustre/pulsar/scratch/GUPPI2"
+if opt.basedir is not None:
+    basedir = opt.basedir
 if not os.path.exists(basedir):
     print "Output base directory '%s' does not exist, exiting." % basedir
     sys.stdout.flush()
@@ -75,7 +94,7 @@ error_logs = {}
 for f in files:
     (fname,proj) = f.split()
     # Skip test projects for now
-    if proj[0]=='T': continue
+    #if proj[0]=='T': continue
     outdir = basedir + "/" + projid_to_dir(proj) + "/" + proj + "/GUPPI"
     if verbose:
         print outdir
