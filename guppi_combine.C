@@ -295,7 +295,17 @@ void guppi_combine::run ()
     patch.set_contemporaneity_policy( new Contemporaneity::AtEarth );
 
     // Start with the mid-band archive
-    Reference::To<Archive> out_arch = archives[archives.size() / 2];
+    int ref_arch = archives.size() / 2;
+
+    // This should catch the case where the mid-band archive was truncated
+    // mid-observation.
+    for (unsigned iarch=0; iarch<archives.size(); iarch++)
+    {
+        int nsub = archives[iarch]->get_nsubint();
+        if (nsub > archives[ref_arch]->get_nsubint()) ref_arch = iarch;
+    }
+
+    Reference::To<Archive> out_arch = archives[ref_arch];
     if (verbose)
         cerr << name << ": using '" << out_arch->get_filename()
             << "' as reference" << endl;
