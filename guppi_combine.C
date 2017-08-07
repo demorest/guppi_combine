@@ -308,8 +308,8 @@ void guppi_combine::run ()
     // Correct the FITS header stuff, assumes 8 nodes
     FITSHdrExtension *hdr = out_arch->get<FITSHdrExtension>();
     double freq_sum = hdr->obsfreq + hdr->obsbw/(double)hdr->obsnchan/2.0;
-    hdr->obsbw *= 8.0;
-    hdr->obsnchan *= 8;
+    double final_obsbw = hdr->obsbw * 8.0;
+    double final_obsnchan = hdr->obsnchan * 8;
 
     // Loop over all the others
     for (unsigned iarch=0; iarch<archives.size(); iarch++)
@@ -372,9 +372,11 @@ void guppi_combine::run ()
 
     }
 
-    // Fix the center freq
+    // Fix the center freq and other "OBS*" params in output file
     hdr = out_arch->get<FITSHdrExtension>();
     hdr->obsfreq = freq_sum / (double)archives.size();
+    hdr->obsnchan = final_obsnchan;
+    hdr->obsbw = final_obsbw;
 
     // Store original out_arch files
     string orig_fname = out_arch->get_filename();
