@@ -64,6 +64,9 @@ class guppi_combine: public Pulsar::Application
         //! Data are in gpuN/ subdir structure under the given base
         string base_dir;
 
+        //! Directory convention to use (guppi, vegas)
+        string subdir_naming;
+
         //! Download data from gpu cluster
         bool transfer;
 
@@ -99,6 +102,8 @@ guppi_combine::guppi_combine() : Pulsar::Application("guppi_combine",
 
     transfer = false;
     parallel_transfers = true;
+
+    subdir_naming = "guppi";
 
     cluster_nodes.clear();
     cluster_nodes.push_back("gpu1");
@@ -143,6 +148,9 @@ void guppi_combine::add_options (CommandLine::Menu& menu)
             "argument to the program when this option is in use."
             );
 
+    arg = menu.add(subdir_naming, 'S', "type");
+    arg->set_help("subdir naming scheme (guppi, vegas)");
+
     arg = menu.add (transfer, 'T');
     arg->set_help("transfer data directly from gpu cluster nodes");
     // Same hack with 'script' variable happens in this case
@@ -181,7 +189,13 @@ void guppi_combine::setup ()
         if (unload_name.empty()) 
             unload_name = script;
         string filepattern;
-        filepattern = base_dir + "/gpu*/" + script;
+        if (subdir_naming == "guppi")
+            filepattern = base_dir + "/gpu*/" + script;
+        else if (subdir_naming == "vegas")
+            filepattern = base_dir + "/[A-Z]/" + script;
+        else
+            throw Error (InvalidParam, "guppi_combine::setup",
+                    "Unknown subdir namining scheme: " + subdir_naming);
         filenames.clear();
         dirglob (&filenames, filepattern);
     }
